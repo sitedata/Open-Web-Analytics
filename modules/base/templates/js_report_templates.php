@@ -1,10 +1,10 @@
 <script type="text/x-jqote-template" id="metricInfobox">
  <![CDATA[
  
-	<div id = "<*= this.dom_id *>" class="owa_metricInfobox" style="min-width:135px;width:<*= this.width || 'auto' *>;">
-	<p class="owa_metricInfoboxLabel"><*= this.label *></p>
-	<p class="owa_metricInfoboxLargeNumber"><*= this.formatted_value *></p>
-	</div>
+    <div id = "<*= this.dom_id *>" class="owa_metricInfobox" style="min-width:135px;width:<*= this.width || 'auto' *>;">
+    <p class="owa_metricInfoboxLabel"><*= this.label *></p>
+    <p class="owa_metricInfoboxLargeNumber"><*= this.formatted_value *></p>
+    </div>
 
 ]]>
 </script>
@@ -13,25 +13,25 @@
 <![CDATA[
 
 <TD class="<*= this.result_type *>cell"><*= this.value *></TD>
-		
-]]> 
+
+]]>
 </script>
 
 <script type="text/x-jqote-template" id="table-row">
 <![CDATA[
 <TR>
 <*= this.columns*>
-</TR>		
-]]> 
+</TR>
+]]>
 </script>
 
 <script type="text/x-jqote-template" id="simpleTable-outer">
 <![CDATA[
 
 <table id="<*= this.dom_id *>" class="simpleTable">
-	<tr>
-		<*= this.headers *>
-	</tr>
+    <tr>
+        <*= this.headers *>
+    </tr>
 </table>
 ]]>
 </script>
