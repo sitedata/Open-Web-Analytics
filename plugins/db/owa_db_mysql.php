@@ -17,7 +17,7 @@
 //
 
 
-define('OWA_DTD_BIGINT', 'BIGINT'); 
+define('OWA_DTD_BIGINT', 'BIGINT');
 define('OWA_DTD_INT', 'INT');
 define('OWA_DTD_TINYINT', 'TINYINT(1)');
 define('OWA_DTD_TINYINT2', 'TINYINT(2)');
@@ -35,13 +35,14 @@ define('OWA_DTD_INDEX', 'KEY');
 define('OWA_DTD_AUTO_INCREMENT', 'AUTO_INCREMENT');
 define('OWA_DTD_NOT_NULL', 'NOT NULL');
 define('OWA_DTD_UNIQUE', 'PRIMARY KEY(%s)');
-define('OWA_SQL_ADD_COLUMN', 'ALTER TABLE %s ADD %s %s');   
+define('OWA_SQL_ADD_COLUMN', 'ALTER TABLE %s ADD %s %s');
 define('OWA_SQL_DROP_COLUMN', 'ALTER TABLE %s DROP %s');
-define('OWA_SQL_RENAME_COLUMN', 'ALTER TABLE %s CHANGE %s %s %s'); 
-define('OWA_SQL_MODIFY_COLUMN', 'ALTER TABLE %s MODIFY %s %s'); 
-define('OWA_SQL_RENAME_TABLE', 'ALTER TABLE %s RENAME %s'); 
-define('OWA_SQL_CREATE_TABLE', 'CREATE TABLE IF NOT EXISTS %s (%s) %s'); 
-define('OWA_SQL_DROP_TABLE', 'DROP TABLE IF EXISTS %s');  
+define('OWA_SQL_RENAME_COLUMN', 'ALTER TABLE %s CHANGE %s %s %s');
+define('OWA_SQL_MODIFY_COLUMN', 'ALTER TABLE %s MODIFY %s %s');
+define('OWA_SQL_RENAME_TABLE', 'ALTER TABLE %s RENAME %s');
+define('OWA_SQL_CREATE_TABLE', 'CREATE TABLE IF NOT EXISTS %s (%s) %s');
+define('OWA_SQL_DROP_TABLE', 'DROP TABLE IF EXISTS %s');
+define('OWA_SQL_SHOW_TABLE', "show tables like '%s'");
 define('OWA_SQL_INSERT_ROW', 'INSERT into %s (%s) VALUES (%s)');
 define('OWA_SQL_UPDATE_ROW', 'UPDATE %s SET %s %s');
 define('OWA_SQL_DELETE_ROW', "DELETE from %s %s");
@@ -84,191 +85,231 @@ define('OWA_DTD_TABLE_CHARACTER_ENCODING', 'CHARACTER SET = %s');
  * @license     http://www.gnu.org/copyleft/gpl.html GPL v2.0
  * @category    owa
  * @package     owa
- * @version		$Revision$	      
- * @since		owa 1.0.0
+ * @version        $Revision$
+ * @since        owa 1.0.0
  */
 class owa_db_mysql extends owa_db {
-	
-	function connect() {
-	
-		if ( ! $this->connection ) {
-			
-			// make a persistent connection if need be.
-			if ( $this->getConnectionParam('persistant') ) {
-			
-				$host = 'p:' . $this->getConnectionParam('host');
-			
-			} else {
-				
-				$host = $this->getConnectionParam('host');
-			}
-			
-			// get a connection
-			$this->connection = mysqli_connect(
-				$host,
-				$this->getConnectionParam('user'),
-				$this->getConnectionParam('password'),
-				$this->getConnectionParam('name')
-	    	);
-			
-			// explicitng set the character set as UTF-8	
-			if (function_exists('mysqli_set_charset')) {
-			
-				mysqli_set_charset($this->connection, 'utf8' );
-				
-			} else {
-				
-				$this->query("SET NAMES 'utf8'");
-			}
-			
-			// turn off strict mode. needed on mysql 5.7 and lter when it is turned on by default.
-			$this->query( "SET SESSION sql_mode=''" );
-			
-		}
-				
-		if ( ! $this->connection ) {
-		
-			$this->e->alert('Could not connect to database.');
-			$this->connection_status = false;
-			return false;
-			
-		} else {
-			
-			$this->connection_status = true;
-			return true;
-		}
-	}
-	
-	
-	/**
-	 * Database Query
-	 *
-	 * @param 	string $sql
-	 * @access 	public
-	 * 
-	 */
-	function query( $sql ) {
+
+    function connect() {
+
+        if ( ! $this->connection ) {
+
+            // make a persistent connection if need be.
+            if ( $this->getConnectionParam('persistant') ) {
+
+                $host = 'p:' . $this->getConnectionParam('host');
+
+            } else {
+
+                $host = $this->getConnectionParam('host');
+            }
+
+            if ($this->getConnectionParam('port')) {
+                $port = $this->getConnectionParam('port');
+            } else {
+                $port = 3306;
+            }
+            
+            $socket = null;
+            $client_flags = defined( 'OWA_MYSQL_CLIENT_FLAGS' ) ? OWA_MYSQL_CLIENT_FLAGS : 0;
+            
+            /*
+             * Set the MySQLi error reporting off.
+             * This is needed due to the default value change from `MYSQLI_REPORT_OFF`
+             * to `MYSQLI_REPORT_ERROR|MYSQLI_REPORT_STRICT` in PHP 8.1.
+             */
+            mysqli_report( MYSQLI_REPORT_OFF );
+            
+            $this->connection = mysqli_init();
+
+            // get a connection
+            mysqli_real_connect(
+                $this->connection,
+                $host,
+                $this->getConnectionParam('user'),
+                $this->getConnectionParam('password'),
+                $this->getConnectionParam('name'),
+                $port,
+                $socket,
+                $client_flags
+            );
+
+            // explicitly set the character set as UTF-8
+            if (function_exists('mysqli_set_charset')) {
+
+                mysqli_set_charset($this->connection, 'utf8' );
+
+            } else {
+
+                $this->query("SET NAMES 'utf8'");
+            }
+
+            // turn off strict mode. needed on mysql 5.7 and lter when it is turned on by default.
+            $this->query( "SET SESSION sql_mode=''" );
+
+        }
+
+        if ( ! $this->connection ) {
+
+            $this->e->alert('Could not connect to database.');
+            $this->connection_status = false;
+            return false;
+
+        } else {
+
+            $this->connection_status = true;
+            return true;
+        }
+    }
+
+
+    /**
+     * Database Query
+     *
+     * @param     string $sql
+     * @access     public
+     *
+     */
+    function query( $sql ) {
   
-  		if ( $this->connection_status == false) {
-  			
-  			owa_coreAPI::profile($this, __FUNCTION__, __LINE__);
-  			
-  			$this->connect();
-  			
-  			owa_coreAPI::profile($this, __FUNCTION__, __LINE__);
-  		}
+          if ( $this->connection_status == false) {
+
+              owa_coreAPI::profile($this, __FUNCTION__, __LINE__);
+
+              $this->connect();
+
+              owa_coreAPI::profile($this, __FUNCTION__, __LINE__);
+          }
   
-  		owa_coreAPI::profile($this, __FUNCTION__, __LINE__);
-		
-		$this->e->debug(sprintf('Query: %s', $sql));
-		
-		$this->result = array();
-		
-		$this->new_result = '';	
-		
-		if ( ! empty( $this->new_result ) ) {
-		
-			mysqli_free_result($this->new_result);
-		}
-		
-		owa_coreAPI::profile($this, __FUNCTION__, __LINE__, $sql);
-		
-		$result = @mysqli_query( $this->connection, $sql );
-		
-		owa_coreAPI::profile($this, __FUNCTION__, __LINE__);			
-		// Log Errors
-		
-		if ( mysqli_errno( $this->connection ) ) {
-			
-			$this->e->debug(
-				sprintf(
-					'A MySQL error ocured. Error: (%s) %s. Query: %s',
-					mysqli_errno( $this->connection ), 
-					htmlspecialchars( mysqli_error( $this->connection ) ),
-					$sql
-				)
-			);
-		}
-		
-		owa_coreAPI::profile($this, __FUNCTION__, __LINE__);
-		
-		$this->new_result = $result;
-		
-		return $this->new_result;
-	}
-	
-	function close() {
-		
-		@mysqli_close( $this->connection );
-	}
-	
-	/**
-	 * Fetch result set array
-	 *
-	 * @param 	string $sql
-	 * @return 	array
-	 * @access  public
-	 */
-	function get_results( $sql ) {
-	
-		if ( $sql ) {
-		
-			$this->query($sql);
-		}
-	
-		//$this->result = array();
-		while ( $row = mysqli_fetch_assoc( $this->new_result ) ) {
-			
-			array_push($this->result, $row);
-		
-		}
-		
-		if ( $this->result ) {
-						
-			return $this->result;
-			
-		} else {
-		
-			return null;
-		}
-	}
-	
-	/**
-	 * Fetch Single Row
-	 *
-	 * @param string $sql
-	 * @return array
-	 */
-	function get_row($sql) {
-		
-		$this->query($sql);
-		
-		//print_r($this->result);
-		$row = @mysqli_fetch_assoc($this->new_result);
-		
-		return $row;
-	}
-	
-	/**
-	 * Prepares and escapes string
-	 *
-	 * @param string $string
-	 * @return string
-	 */
-	function prepare( $string ) {
-		
-		if ($this->connection_status == false) {
-  			$this->connect();
-  		}
-		
-		return mysqli_real_escape_string( $this->connection, $string ); 
-		
-	}
-	
-	function getAffectedRows() {
-		
-		return mysqli_affected_rows();
-	}
+          owa_coreAPI::profile($this, __FUNCTION__, __LINE__);
+
+        $this->e->debug(sprintf('Query: %s', $sql));
+
+        $this->result = array();
+
+        $this->new_result = '';
+
+        if ( ! empty( $this->new_result ) ) {
+
+            mysqli_free_result($this->new_result);
+        }
+
+        owa_coreAPI::profile($this, __FUNCTION__, __LINE__, $sql);
+
+       try {
+        $result = @mysqli_query( $this->connection, $sql );
+    
+            owa_coreAPI::profile($this, __FUNCTION__, __LINE__);
+            // Log Errors
+    
+            if ( mysqli_errno( $this->connection ) ) {
+    
+                $this->e->debug(
+                    sprintf(
+                        'A MySQL error ocured. Error: (%s) %s. Query: %s',
+                        mysqli_errno( $this->connection ),
+                        htmlspecialchars( mysqli_error( $this->connection ) ),
+                        $sql
+                    )
+                );
+            }
+    
+            owa_coreAPI::profile($this, __FUNCTION__, __LINE__);
+        } catch(\Exception $e) {
+            $result = false;
+           $this->e->debug(
+                    sprintf(
+                        'An exception occurred while running the database query. Exception: %s. Query: %s',
+                         htmlspecialchars($e->getMessage()),
+                        $sql
+                    )
+                );
+        }
+        $this->new_result = $result;
+
+        return $this->new_result;
+    }
+
+    function close() {
+
+        @mysqli_close( $this->connection );
+    }
+
+    /**
+     * Fetch result set array
+     *
+     * @param     string $sql
+     * @return     array
+     * @access  public
+     */
+    function get_results( $sql ) {
+
+        if ( $sql ) {
+
+            $this->query($sql);
+        }
+
+        //$this->result = array();
+
+        if (!$this->new_result) {
+            return null;
+        }
+
+        while ( $row = mysqli_fetch_assoc( $this->new_result ) ) {
+
+            array_push($this->result, $row);
+
+        }
+
+        if ( $this->result ) {
+
+            return $this->result;
+
+        } else {
+
+            return null;
+        }
+    }
+
+    /**
+     * Fetch Single Row
+     *
+     * @param string $sql
+     * @return array
+     */
+    function get_row($sql) {
+
+        $this->query($sql);
+
+        //print_r($this->result);
+        $row = mysqli_fetch_assoc($this->new_result);
+
+        return $row;
+    }
+
+    /**
+     * Prepares and escapes string
+     *
+     * @param string $string
+     * @return string
+     */
+    function prepare( $string ) {
+        if(is_null($string)){
+            return $string;
+        }
+
+        if ($this->connection_status == false) {
+              $this->connect();
+          }
+
+        return mysqli_real_escape_string( $this->connection, $string );
+
+    }
+
+    function getAffectedRows() {
+
+        return mysqli_affected_rows();
+    }
 }
 
 ?>
